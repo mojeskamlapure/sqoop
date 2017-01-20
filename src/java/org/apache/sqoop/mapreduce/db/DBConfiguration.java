@@ -120,6 +120,12 @@ public class DBConfiguration {
   /** Number of fields in the Output table. */
   public static final String OUTPUT_FIELD_COUNT_PROPERTY =
     "mapreduce.jdbc.output.field.count";
+  /**
+     * The name of db bandwidth, which can resolve the network I/O 
+     * usage of one sqoop import or export operation.
+     */
+    public static final String DB_BANDWIDTH_CTRL = "sqoop.db.bandwidth";
+   
 
   /**
    * The name of the parameter to use for making Isolation level to be

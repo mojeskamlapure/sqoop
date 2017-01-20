@@ -32,6 +32,9 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.sqoop.util.LoggingUtils;
 import com.cloudera.sqoop.mapreduce.db.DBConfiguration;
 import com.cloudera.sqoop.lib.SqoopRecord;
+import org.apache.commons.lang.StringUtils;
+import org.apache.hadoop.hdfs.util.DataTransferThrottler;
+import org.apache.sqoop.SqoopOptions;
 
 /**
  * Abstract RecordWriter base class that buffers SqoopRecords to be injected
@@ -60,6 +63,7 @@ public abstract class AsyncSqlRecordWriter<K extends SqoopRecord, V>
   // Background thread to actually perform the updates.
   private AsyncSqlOutputFormat.AsyncSqlExecThread execThread;
   private boolean startedExecThread;
+  private DataTransferThrottler throttler;
 
   private boolean closed;
 
@@ -84,6 +88,11 @@ public abstract class AsyncSqlRecordWriter<K extends SqoopRecord, V>
         connection, stmtsPerTx);
     this.execThread.setDaemon(true);
     this.startedExecThread = false;
+    int numOfMaps = conf.getInt(ExportJobBase.EXPORT_MAP_TASKS_KEY, SqoopOptions.DEFAULT_NUM_MAPPERS);
+     long bandwidth = conf.getLong(DBConfiguration.DB_BANDWIDTH_CTRL, Long.MIN_VALUE);
+       if (bandwidth > 0) {
+         this.throttler = new DataTransferThrottler(bandwidth/numOfMaps);
+        }
 
     this.closed = false;
   }
@@ -223,7 +232,12 @@ public abstract class AsyncSqlRecordWriter<K extends SqoopRecord, V>
   public void write(K key, V value)
       throws InterruptedException, IOException {
     try {
-      records.add((SqoopRecord) key.clone());
+    	 SqoopRecord sr = (SqoopRecord) key.clone();
+    	     if (throttler != null) {
+    	        throttler.throttle(getRowSizeInBytes(sr));
+    	      }
+    	         
+    	       records.add(sr);
       if (records.size() >= this.rowsPerStmt) {
         execUpdate(false, false);
       }
@@ -233,4 +247,12 @@ public abstract class AsyncSqlRecordWriter<K extends SqoopRecord, V>
       throw new IOException(sqlException);
     }
   }
+  private long getRowSizeInBytes(SqoopRecord sr) {
+	     long cnt = 0;
+	     String row = sr.toString(true);
+	      if (!StringUtils.isEmpty(row)) {
+	        cnt += row.getBytes().length;
+	      }
+	      return cnt;
+	    }
 }

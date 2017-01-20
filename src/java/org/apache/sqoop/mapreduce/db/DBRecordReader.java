@@ -33,10 +33,14 @@ import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.sqoop.mapreduce.DBWritable;
 import org.apache.hadoop.util.ReflectionUtils;
+import org.apache.hadoop.hdfs.util.DataTransferThrottler;
+import org.apache.sqoop.SqoopOptions;
+import org.apache.sqoop.config.ConfigurationConstants;
+import org.apache.sqoop.mapreduce.DBWritable;
+import org.apache.sqoop.util.LoggingUtils;
 
 import com.cloudera.sqoop.mapreduce.db.DBConfiguration;
 import com.cloudera.sqoop.mapreduce.db.DBInputFormat;
-import org.apache.sqoop.util.LoggingUtils;
 
 /**
  * A RecordReader that reads records from a SQL table.
@@ -73,6 +77,7 @@ public class DBRecordReader<T extends DBWritable> extends
   private String [] fieldNames;
 
   private String tableName;
+  private DataTransferThrottler throttler;
 
   /**
    * @param split The InputSplit to read data for
@@ -94,6 +99,11 @@ public class DBRecordReader<T extends DBWritable> extends
       this.fieldNames = Arrays.copyOf(fields, fields.length);
     }
     this.tableName = table;
+    int numOfMaps = conf.getInt(ConfigurationConstants.PROP_MAPRED_MAP_TASKS, SqoopOptions.DEFAULT_NUM_MAPPERS);
+        long bandwidth = conf.getLong(DBConfiguration.DB_BANDWIDTH_CTRL, Long.MIN_VALUE);
+        if (bandwidth > 0) {
+          this.throttler = new DataTransferThrottler(bandwidth/numOfMaps);
+        }
   }
   // CHECKSTYLE:ON
 
@@ -242,6 +252,9 @@ public class DBRecordReader<T extends DBWritable> extends
       key.set(pos + split.getStart());
 
       value.readFields(results);
+      if (throttler != null) {
+    	          throttler.throttle(getRowSizeInBytes(results));
+    	        }
 
       pos++;
     } catch (SQLException e) {
@@ -278,6 +291,17 @@ public class DBRecordReader<T extends DBWritable> extends
     }
     return true;
   }
+  
+  private long getRowSizeInBytes(ResultSet rs) throws SQLException {
+	      long cnt = 0;
+	      int cols = rs.getMetaData().getColumnCount();
+	      for (int i = 0; i < cols; i++) {
+	        if (rs.getBytes(i+1) != null) {
+	          cnt += rs.getBytes(i + 1).length;
+	        }
+	      }
+	      return cnt;
+	    }
 
   /**
    * @return true if nextKeyValue() would return false.
