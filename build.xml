@@ -40,7 +40,7 @@
   <property environment="env"/>
   <property name="name" value="sqoop" />
   <property name="Name" value="Sqoop" />
-  <property name="version" value="1.4.6-bandwidth-control-SNAPSHOT" />
+  <property name="version" value="1.4.6-bandwidth-control" />
 
   <!-- Ivy library properties -->
   <property name="ivy.dir" location="${basedir}/ivy" />
@@ -55,7 +55,7 @@
   <property name="artifact.name" value="${name}-${version}" />
   <property name="dest.jar" value="${artifact.name}.jar" />
   <property name="test.jar" value="${name}-test-${version}.jar" />
-  <property name="git.hash" value="" />
+  <property name="git.hash" value="14ca3bd31086ddb3ef2a112949a2b5c5c1aa4b2a" />
 
   <!-- programs used -->
   <property name="python" value="python" />
@@ -113,10 +113,11 @@
   <property name="src.artifact.name" value="${artifact.name}" />
   <property name="src.dist.dir" location="${build.dir}/${src.artifact.name}" />
   <property name="src.tar.file" location="${build.dir}/${src.artifact.name}.tar.gz" />
-
+  <property name="javadoc-jar" value="${dist.dir}/lib/${artifact.name}-${version}-javadoc.jar" />
+  
   <!-- compilation -->
-  <property name="targetJavaVersion" value="1.8" />
-  <property name="sourceJavaVersion" value="1.8" />
+  <property name="targetJavaVersion" value="1.7" />
+  <property name="sourceJavaVersion" value="1.7" />
   <property name="javac.deprecation" value="off"/>
   <property name="javac.debug" value="on"/>
   <property name="build.encoding" value="ISO-8859-1"/>
@@ -138,9 +139,8 @@
   <!-- maven -->
   <property name="mvn.build.dir" value="${build.dir}/m2" />
   <property name="mvn.repo" value="snapshots" />
-  <property name="mvn.repo.id" value="cloudera.${mvn.repo}.repo" />
-  <property name="mvn.deploy.url"
-      value="https://repository.cloudera.com/content/repositories/${mvn.repo}"/>
+  <property name="mvn.repo.id" value="ossrh" />
+  <property name="mvn.deploy.url" value="https://oss.sonatype.org/service/local/staging/deploy/maven2/" />
   <property name="sqoop.pom" value="${mvn.build.dir}/sqoop.pom" />
   <property name="sqooptest.pom" value="${mvn.build.dir}/sqoop-test.pom" />
 
@@ -986,7 +986,7 @@
         uri="urn:maven-artifact-ant"
         classpathref="mvn-ant-task.classpath"/>
 
-    <!-- generate our poms from our ivy files. -->
+    <!-- generate our poms from our ivy files.
     <mkdir dir="${mvn.build.dir}" />
     <ivy:makepom ivyfile="ivy/sqoop.xml" pomfile="${sqoop.pom}"
         settingsRef="${name}.ivy.settings">
@@ -998,8 +998,9 @@
       <mapping conf="default" scope="compile" />
       <mapping conf="runtime" scope="runtime" />
     </ivy:makepom>
-
-    <!-- Change the version in the pom file to reflect our claimed version. -->
+    -->
+    
+	<!-- Change the version in the pom file to reflect our claimed version. -->
     <replaceregexp>
       <regexp pattern="&lt;version&gt;.*&lt;/version&gt;" />
       <substitution expression="&lt;version&gt;${version}&lt;/version&gt;" />
@@ -1038,29 +1039,86 @@
     </artifact:install>
   </target>
 
-  <target name="mvn-deploy" depends="init,mvn-prep,jar-all,srcjars"
+  <target name="mvn-deploy" depends="init,mvn-prep,jar-all,srcjars,javadoc-jar"
       description="Deploy Sqoop to public maven repository">
-    <artifact:pom file="${sqoop.pom}" id="sqoop" />
-    <artifact:deploy file="${build.dir}/${dest.jar}">
-      <remoteRepository id="${mvn.repo.id}" url="${mvn.deploy.url}"/>
-      <pom refid="sqoop" />
-      <attach file="${build.srcjar.dir}/${artifact.name}-sources.jar"
-          classifier="sources" />
-    </artifact:deploy>
 
-    <artifact:pom file="${sqooptest.pom}" id="sqoop-test" />
-    <artifact:deploy file="${build.dir}/${test.jar}">
-      <remoteRepository id="${mvn.repo.id}" url="${mvn.deploy.url}"/>
-      <pom refid="sqoop-test" />
-      <attach file="${build.srcjar.dir}/${name}-test-${version}-sources.jar"
-          classifier="sources" />
-    </artifact:deploy>
+	<!-- sign and deploy the main artifact -->
+    <artifact:mvn>
+      <arg value="org.apache.maven.plugins:maven-gpg-plugin:1.3:sign-and-deploy-file" />
+      <arg value="-Durl=${mvn.deploy.url}" />
+      <arg value="-DrepositoryId=${mvn.repo.id}" />
+      <arg value="-DpomFile=${sqoop.pom}" />
+      <arg value="-Dfile=${build.dir}/${dest.jar}" />
+      <arg value="-Pgpg" />
+    </artifact:mvn>
 
+    <!-- sign and deploy the sources artifact -->
+	<artifact:mvn>
+		<arg value="org.apache.maven.plugins:maven-gpg-plugin:1.3:sign-and-deploy-file" />
+		<arg value="-Durl=${mvn.deploy.url}" />
+		<arg value="-DrepositoryId=${mvn.repo.id}" />
+		<arg value="-DpomFile=${sqoop.pom}" />
+		<arg value="-Dfile=${build.srcjar.dir}/${artifact.name}-sources.jar" />
+		<arg value="-Dclassifier=sources" />
+		<arg value="-Pgpg" />
+	</artifact:mvn>
+
+	<!-- sign and deploy the javadoc artifact -->
+    <artifact:mvn>
+      <arg value="org.apache.maven.plugins:maven-gpg-plugin:1.3:sign-and-deploy-file" />
+      <arg value="-Durl=${mvn.deploy.url}" />
+      <arg value="-DrepositoryId=${mvn.repo.id}" />
+      <arg value="-DpomFile=${sqoop.pom}" />
+      <arg value="-Dfile=${javadoc-jar}" />
+      <arg value="-Dclassifier=javadoc" />
+      <arg value="-Pgpg" />
+    </artifact:mvn>
+  
+	
+    <!-- sign and deploy the main artifact -->
+    <artifact:mvn>
+      <arg value="org.apache.maven.plugins:maven-gpg-plugin:1.3:sign-and-deploy-file" />
+      <arg value="-Durl=${mvn.deploy.url}" />
+      <arg value="-DrepositoryId=${mvn.repo.id}" />
+      <arg value="-DpomFile=${sqooptest.pom}" />
+      <arg value="-Dfile=${build.dir}/${test.jar}" />
+      <arg value="-Pgpg" />
+    </artifact:mvn>
+
+    <!-- sign and deploy the test sources artifact -->
+	<artifact:mvn>
+		<arg value="org.apache.maven.plugins:maven-gpg-plugin:1.3:sign-and-deploy-file" />
+		<arg value="-Durl=${mvn.deploy.url}" />
+		<arg value="-DrepositoryId=${mvn.repo.id}" />
+		<arg value="-DpomFile=${sqooptest.pom}" />
+		<arg value="-Dfile=${build.srcjar.dir}/${name}-test-${version}-sources.jar" />
+		<arg value="-Dclassifier=sources" />
+		<arg value="-Pgpg" />
+	</artifact:mvn>
+
+	<!-- sign and deploy the test javadoc artifact -->
+    <artifact:mvn>
+      <arg value="org.apache.maven.plugins:maven-gpg-plugin:1.3:sign-and-deploy-file" />
+      <arg value="-Durl=${mvn.deploy.url}" />
+      <arg value="-DrepositoryId=${mvn.repo.id}" />
+      <arg value="-DpomFile=${sqooptest.pom}" />
+      <arg value="-Dfile=${javadoc-jar}" />
+      <arg value="-Dclassifier=javadoc" />
+      <arg value="-Pgpg" />
+    </artifact:mvn>
+ 
   </target>
 
   <target name="docs" depends="real-docs,relnotes,javadoc"
       description="Build documentation"/>
-
+  
+  <target name="javadoc-jar">
+	 <!-- build the javadoc jar -->
+	 <jar jarfile="${javadoc-jar}">
+	 	<fileset dir="${build.dir}/docs" />
+	 </jar>
+  </target>
+  
   <target name="real-docs" depends="docs-uptodate,init" unless="skip-real-docs">
     <exec executable="make" failonerror="true">
       <arg value="-C" />

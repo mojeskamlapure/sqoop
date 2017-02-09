@@ -18,7 +18,7 @@ specific language governing permissions and limitations
 under the License.
 -->
 <ivy-module version="1.0">
-  <info organisation="org.apache.sqoop" module="${name}">
+  <info organisation="com.github.mojeskamlapure" module="${name}">
     <license name="Apache 2.0"/>
     <ivyauthor name="Sqoop Team" url="http://sqoop.apache.org/" />
     <description>
